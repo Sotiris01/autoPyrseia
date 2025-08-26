@@ -1,0 +1,11 @@
+# Core dependencies
+PyMuPDF>=1.23.0
+openpyxl>=3.1.0
+Pillow>=10.0.0
+pywin32>=306;platform_system=="Windows"
+
+# Optional dependencies for enhanced functionality
+reportlab>=4.0.0  # For PDF creation (used in create_pdf_helper.py)
+
+# Development dependencies (optional)
+# pyinstaller>=6.0.0  # For building executable (uncomment if needed)

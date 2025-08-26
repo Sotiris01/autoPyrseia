@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+*.manifest
+*.exe
+
+# Application specific data folders
+DATA/
+BACK UP DATA/
+downloads/
+temp/
+test_data/
+
+# Runtime files
+history.json
+history_backup.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+*.out
+
+# Local configuration (keep config.json as template)
+config_local.json
+
+# Test files
+test_*.py
+debug_*.py
+verify_*.py
+demo_*.py
+analyze_*.py
+find_*.py
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
