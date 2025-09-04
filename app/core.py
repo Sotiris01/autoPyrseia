@@ -138,6 +138,9 @@ class AutoPyrseiaApp(KeyboardHandlerMixin):
         # Initialize progress manager for coordinated progress updates
         self.progress_manager = ProgressManager(self.status_bar, self.root)
         
+        # Connect progress manager to USB extractor
+        self.usb_extractor.progress_manager = self.progress_manager
+        
         # Configure notebook styling
         self._configure_notebook_style()
         

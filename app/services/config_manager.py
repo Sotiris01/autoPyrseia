@@ -9,6 +9,7 @@ Config Manager για autoPyrseia
 
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
 from app.utils.path_manager import get_path_manager
 
 class ConfigManager:
@@ -27,11 +28,16 @@ class ConfigManager:
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
+                # Migrate existing config to include username_history
+                self._migrate_config()
             else:
                 # Προεπιλεγμένες ρυθμίσεις
                 self.config = {
                     "file_number": 1,
                     "username": "ΜΠΑΛΑΤΣΙΑΣ ΣΩΤΗΡΙΟΣ",
+                    "username_history": {
+                        "ΜΠΑΛΑΤΣΙΑΣ ΣΩΤΗΡΙΟΣ": datetime.now().isoformat()
+                    },
                     "organization_identity": "ΚΕΠΙΚ 8 Μ/Π ΤΑΞ",
                     "last_usb_path": "",
                     "auto_process": True,
@@ -42,6 +48,18 @@ class ConfigManager:
         except Exception as e:
             print(f"Σφάλμα στη φόρτωση ρυθμίσεων: {e}")
             self.config = {}
+    
+    def _migrate_config(self):
+        """Migrate existing config to include username_history"""
+        if "username_history" not in self.config:
+            current_username = self.config.get("username", "")
+            if current_username:
+                self.config["username_history"] = {
+                    current_username: datetime.now().isoformat()
+                }
+            else:
+                self.config["username_history"] = {}
+            self.save_config()
     
     def save_config(self):
         """Αποθήκευση των ρυθμίσεων"""
@@ -80,9 +98,69 @@ class ConfigManager:
         return self.config.get("username", "")
     
     def set_username(self, username):
-        """Ορισμός του ονόματος χρήστη"""
-        self.config["username"] = username
-        self.save_config()
+        """Ορισμός του ονόματος χρήστη με ενημέρωση ιστορικού"""
+        username = username.strip()
+        if username:
+            self.config["username"] = username
+            # Update username history with current timestamp
+            if "username_history" not in self.config:
+                self.config["username_history"] = {}
+            self.config["username_history"][username] = datetime.now().isoformat()
+            # Clean old usernames (older than 5 days)
+            self._cleanup_old_usernames()
+            self.save_config()
+    
+    def get_username_suggestions(self):
+        """Λήψη προτάσεων ονομάτων χρήστη ταξινομημένα κατά συχνότητα χρήσης"""
+        if "username_history" not in self.config:
+            return []
+        
+        # Clean old usernames first
+        self._cleanup_old_usernames()
+        
+        # Sort by most recent usage (reverse chronological)
+        history = self.config.get("username_history", {})
+        suggestions = []
+        
+        for username, timestamp_str in history.items():
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str)
+                suggestions.append((username, timestamp))
+            except ValueError:
+                # Skip invalid timestamps
+                continue
+        
+        # Sort by timestamp (most recent first)
+        suggestions.sort(key=lambda x: x[1], reverse=True)
+        
+        # Return only the usernames
+        return [username for username, _ in suggestions]
+    
+    def _cleanup_old_usernames(self):
+        """Καθαρισμός ονομάτων χρήστη που δεν έχουν χρησιμοποιηθεί για >5 ημέρες"""
+        if "username_history" not in self.config:
+            return
+        
+        cutoff_date = datetime.now() - timedelta(days=5)
+        current_username = self.get_username()
+        
+        # Keep track of usernames to remove
+        usernames_to_remove = []
+        
+        for username, timestamp_str in self.config["username_history"].items():
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str)
+                # Remove if older than 5 days AND not the current username
+                if timestamp < cutoff_date and username != current_username:
+                    usernames_to_remove.append(username)
+            except ValueError:
+                # Remove invalid timestamps
+                if username != current_username:
+                    usernames_to_remove.append(username)
+        
+        # Remove old usernames
+        for username in usernames_to_remove:
+            del self.config["username_history"][username]
     
     def get_organization_identity(self):
         """Λήψη της ταυτότητας του οργανισμού"""

@@ -125,6 +125,7 @@ class SignalController:
                 current_signal_data = self.app.current_signal_data
                 signal_id = current_signal_data.get('id', '')
                 fm = current_signal_data.get('fm', '')
+                serial_number = current_signal_data.get('serial_number', None)
                 
                 versioned_signal_data = current_signal_data.copy()
                 
@@ -141,15 +142,17 @@ class SignalController:
                         folder_path = None
                     
                     # Check if this recipient already has this exact signal (same serial)
-                    recipients_with_signal = self.app.duplicate_manager.get_recipients_with_signal(signal_id, fm)
+                    recipients_with_signal = []
+                    if serial_number is not None:
+                        recipients_with_signal = self.app.duplicate_manager.get_recipients_with_signal(signal_id, fm, serial_number)
                     
                     if recipient_name in recipients_with_signal:
                         # This is a duplicate for this recipient - create versioned ID
-                        version_number = self.app.duplicate_manager.get_next_version_number(signal_id, fm, recipient_name)
+                        version_number = self.app.duplicate_manager.get_next_version_number(signal_id, fm, recipient_name, serial_number)
                         versioned_id = self.app.duplicate_manager.get_versioned_signal_id(signal_id, version_number)
                         
                         # Register the new version
-                        self.app.duplicate_manager.register_version(signal_id, fm, recipient_name, version_number)
+                        self.app.duplicate_manager.register_version(signal_id, fm, recipient_name, version_number, serial_number)
                         
                         # Create a copy of signal data with versioned ID for this recipient
                         recipient_signal_data = versioned_signal_data.copy()
@@ -166,7 +169,9 @@ class SignalController:
                         })
                     else:
                         # Check for folder conflict with different signal (same ID, different FM)
-                        folder_version = self.app.duplicate_manager.check_folder_conflict_and_get_version(signal_id, fm, recipient_name)
+                        folder_version = 0
+                        if serial_number is not None:
+                            folder_version = self.app.duplicate_manager.check_folder_conflict_and_get_version(signal_id, fm, recipient_name, serial_number)
                         
                         if folder_version > 0:
                             # Folder conflict exists - use versioned ID
@@ -218,7 +223,8 @@ class SignalController:
                     processed_recipients.append(recipient_name)
                 
                 # Register the signal with selected recipients in duplicate manager
-                self.app.duplicate_manager.register_signal(signal_id, fm, processed_recipients)
+                if serial_number is not None:
+                    self.app.duplicate_manager.register_signal(signal_id, fm, processed_recipients, serial_number)
                 
                 result['selected_recipients'] = recipient_names
                 

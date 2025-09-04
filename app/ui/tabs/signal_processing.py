@@ -180,8 +180,11 @@ class SignalProcessingTab:
         # Check for duplicates
         signal_id = signal_data.get('id', '')
         fm = signal_data.get('fm', '')
+        serial_number = signal_data.get('serial_number', None)
         
-        is_duplicate = self.app.duplicate_manager.is_duplicate(signal_id, fm)
+        is_duplicate = False
+        if serial_number is not None:
+            is_duplicate = self.app.duplicate_manager.is_duplicate(signal_id, fm, serial_number)
         
         # Update StringVar variables
         self.app.id_var.set(signal_data.get('id', 'Μη διαθέσιμο'))
@@ -197,11 +200,11 @@ class SignalProcessingTab:
         self.display_attachments(signal_data.get('attachments', []))
         
         # Display recipients with duplicate handling
-        self.display_recipients_with_duplicate_check(signal_data.get('recipients', []), is_duplicate, signal_id, fm)
+        self.display_recipients_with_duplicate_check(signal_data.get('recipients', []), is_duplicate, signal_id, fm, serial_number)
         
         # Show duplicate notification if needed
         if is_duplicate:
-            self._show_duplicate_notification(signal_id, fm)
+            self._show_duplicate_notification(signal_id, fm, serial_number)
         
         # Enable process button
         self.app.process_button.config(state='normal')
@@ -1059,7 +1062,7 @@ class SignalProcessingTab:
         self.app.theme_text.bind('<Escape>', lambda e: save_theme())
         self.app.theme_text.bind('<Control-Return>', lambda e: save_theme())
     
-    def display_recipients_with_duplicate_check(self, recipients, is_duplicate, signal_id, fm):
+    def display_recipients_with_duplicate_check(self, recipients, is_duplicate, signal_id, fm, serial_number):
         """Display recipients with checkboxes, handling duplicate detection"""
         # Clear previous checkboxes
         for widget in self.app.recipients_checkbox_frame.winfo_children():
@@ -1070,8 +1073,8 @@ class SignalProcessingTab:
         self.is_duplicate_signal = is_duplicate
         self.recipients_with_signal = []
         
-        if is_duplicate:
-            self.recipients_with_signal = self.app.duplicate_manager.get_recipients_with_signal(signal_id, fm)
+        if is_duplicate and serial_number is not None:
+            self.recipients_with_signal = self.app.duplicate_manager.get_recipients_with_signal(signal_id, fm, serial_number)
         
         # Filter recipients if not from manual input
         if hasattr(self.app, 'current_signal_data') and self.app.current_signal_data and \
@@ -1134,17 +1137,18 @@ class SignalProcessingTab:
                     create_tooltip(cb_data['checkbox'], f"Θα δημιουργηθεί νέα έκδοση για τον παραλήπτη")
                     break
     
-    def _show_duplicate_notification(self, signal_id, fm):
+    def _show_duplicate_notification(self, signal_id, fm, serial_number):
         """Show permanent duplicate notification"""
         # Create a permanent notification label
         notification_frame = tk.Frame(self.app.recipients_checkbox_frame)
         notification_frame.pack(fill='x', pady=5)
         
-        serial_number = self.app.duplicate_manager.generate_serial_number(signal_id, fm)
+        # Use the existing serial_number from signal data
+        serial_display = str(serial_number)[:8] if serial_number else "N/A"
         
         notification_label = tk.Label(
             notification_frame,
-            text=f"⚠️ Ανιχνεύθηκε διπλότυπο σήμα (Serial: {serial_number[:8]}...)",
+            text=f"⚠️ Ανιχνεύθηκε διπλότυπο σήμα (Serial: {serial_display}...)",
             font=('Arial', 8),
             fg='orange',
             bg='#fff8dc',

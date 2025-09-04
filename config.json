@@ -1,9 +1,13 @@
 {
-  "file_number": 4,
+  "file_number": 12,
   "username": "ΜΠΑΛΑΤΣΙΑΣ ΣΩΤΗΡΙΟΣ",
   "organization_identity": "ΚΕΠΙΚ 8 Μ/Π ΤΑΞ",
   "last_usb_path": "",
   "auto_process": true,
   "watch_downloads": true,
-  "backup_enabled": true
+  "backup_enabled": true,
+  "username_history": {
+    "ΜΠΑΛΑΤΣΙΑΣ ΣΩΤΗΡΙΟΣ": "2025-09-04T06:13:13.374757",
+    "filios": "2025-09-04T00:25:01.056129"
+  }
 }

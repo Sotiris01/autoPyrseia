@@ -174,25 +174,89 @@ del temp_content.txt
 
 cd ..
 
+REM Test 6: Duplicate detection test with minimal content difference
+echo Creating Test 6: Duplicate detection test with minimal difference...
+mkdir "test6"
+cd "test6"
+
+REM Create first signal
+mkdir "signal_a"
+cd "signal_a"
+
+(
+echo R 999888Z JUN 25
+echo FM DUPLICATE TEST COMMAND
+echo TO ΦΡΟΥΡΑΡΧΕΙΟ ΙΩΑΝΝΙΝΩΝ
+echo ΘΕΜΑ: DUPLICATE TEST SIGNAL
+echo ΣΧΕΤ. : DUPLICATE_TEST_REF
+echo.
+echo This is the first version of the duplicate test signal.
+echo The content is almost identical except for one character.
+echo This tests autoPyrseia's duplicate detection capabilities.
+echo Test marker: A
+echo Test content only - not real military data.
+echo.
+) > temp_content.txt
+
+copy temp_content.txt pyrseia_server.pdf > nul
+python ..\..\..\create_pdf_helper.py temp_content.txt pyrseia_server.pdf
+del temp_content.txt
+
+cd ..
+
+REM Create second signal - identical except one character different
+mkdir "signal_b"
+cd "signal_b"
+
+(
+echo R 999888Z JUN 25
+echo FM DUPLICATE TEST COMMAND
+echo TO ΦΡΟΥΡΑΡΧΕΙΟ ΙΩΑΝΝΙΝΩΝ
+echo ΘΕΜΑ: DUPLICATE TEST SIGNAL
+echo ΣΧΕΤ. : DUPLICATE_TEST_REF
+echo.
+echo This is the first version of the duplicate test signal.
+echo The content is almost identical except for one character.
+echo This tests autoPyrseia's duplicate detection capabilities.
+echo Test marker: B
+echo Test content only - not real military data.
+echo.
+) > temp_content.txt
+
+copy temp_content.txt pyrseia_server.pdf > nul
+python ..\..\..\create_pdf_helper.py temp_content.txt pyrseia_server.pdf
+del temp_content.txt
+
+cd ..
+cd ..
+
 echo.
 echo ================================
 echo Test data creation completed!
 echo ================================
 echo.
-echo Created 5 test folders:
+echo Created 6 test folders:
 echo - test1: 1 recipient, 0 attachments
 echo - test2: 3 recipients, 1 attachment  
 echo - test3: 3 recipients, 2 attachments ^(TO/INFO format^)
 echo - test4: 5 recipients, 1 attachment ^(complex case^)
 echo - test5: 3 recipients, 2 attachments ^(edge case^)
+echo - test6: 2 identical signals, 1 char difference ^(duplicate detection test^)
 echo.
 echo Each folder contains:
 echo - pyrseia_server.pdf ^(test signal file^)
 echo - Various attachment files ^(0-2 per test^)
 echo.
+echo Test 6 special note:
+echo - Contains signal_a and signal_b subfolders
+echo - Both have identical ID, FM, and recipient
+echo - Only difference: "Test marker: A" vs "Test marker: B"
+echo - Perfect for testing duplicate detection system
+echo.
 echo All content is TEST DATA ONLY - no real military information.
 echo.
 echo To use: Copy contents of any test folder to your downloads folder
 echo and run autoPyrseia to test different scenarios.
+echo For test6: Copy signal_a first, process, then copy signal_b to test duplicates.
 echo.
 pause

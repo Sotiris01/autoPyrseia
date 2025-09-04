@@ -57,9 +57,10 @@ class DuplicateManager:
                         except (ValueError, IndexError):
                             pass
                     
-                    # Try to extract FM from signal_info.json if it exists
+                    # Try to extract FM and serial_number from signal_info.json if it exists
                     signal_info_path = signal_folder / "signal_info.json"
                     fm = "UNKNOWN"
+                    serial_number = None
                     
                     if signal_info_path.exists():
                         try:
@@ -67,11 +68,13 @@ class DuplicateManager:
                             with open(signal_info_path, 'r', encoding='utf-8') as f:
                                 signal_info = json.load(f)
                                 fm = signal_info.get('fm', 'UNKNOWN')
+                                serial_number = signal_info.get('serial_number', None)
                         except Exception:
                             pass
                     
-                    # Generate serial number and register
-                    serial_number = self.generate_serial_number(original_id, fm)
+                    # Skip if we couldn't get serial_number from the file
+                    if serial_number is None:
+                        continue
                     
                     if serial_number not in self.signals_db:
                         self.signals_db[serial_number] = {
@@ -98,43 +101,29 @@ class DuplicateManager:
         except Exception as e:
             print(f"Error scanning folder {base_folder}: {e}")
     
-    def generate_serial_number(self, signal_id, fm):
-        """Generate unique serial number from ID and FM combination"""
-        # Create a consistent string from ID and FM
-        combined_string = f"{signal_id.strip()}|{fm.strip()}"
-        
-        # Generate SHA-256 hash and take first 12 characters for readability
-        hash_object = hashlib.sha256(combined_string.encode('utf-8'))
-        serial_number = hash_object.hexdigest()[:12].upper()
-        
-        return serial_number
-    
-    def is_duplicate(self, signal_id, fm):
-        """Check if signal is a duplicate based on serial number - scans fresh each time"""
+    def is_duplicate(self, signal_id, fm, serial_number):
+        """Check if signal is a duplicate based on existing serial number - scans fresh each time"""
         # Refresh database to get latest state from DATA folder
         self.refresh_database()
         
-        serial_number = self.generate_serial_number(signal_id, fm)
         return serial_number in self.signals_db
     
-    def get_duplicate_info(self, signal_id, fm):
+    def get_duplicate_info(self, signal_id, fm, serial_number):
         """Get information about existing duplicate signal - scans fresh each time"""
         # Refresh database to get latest state from DATA folder
         self.refresh_database()
         
-        serial_number = self.generate_serial_number(signal_id, fm)
         return self.signals_db.get(serial_number, None)
     
-    def get_recipients_with_signal(self, signal_id, fm):
+    def get_recipients_with_signal(self, signal_id, fm, serial_number):
         """Get list of recipients that already have this signal - scans fresh each time"""
-        duplicate_info = self.get_duplicate_info(signal_id, fm)
+        duplicate_info = self.get_duplicate_info(signal_id, fm, serial_number)
         if duplicate_info:
             return duplicate_info.get('recipients', [])
         return []
     
-    def register_signal(self, signal_id, fm, recipients):
-        """Register a new signal in the in-memory database"""
-        serial_number = self.generate_serial_number(signal_id, fm)
+    def register_signal(self, signal_id, fm, recipients, serial_number):
+        """Register a new signal in the in-memory database using existing serial_number"""
         
         if serial_number not in self.signals_db:
             self.signals_db[serial_number] = {
@@ -153,9 +142,9 @@ class DuplicateManager:
         
         return serial_number
     
-    def get_next_version_number(self, signal_id, fm, recipient):
+    def get_next_version_number(self, signal_id, fm, recipient, serial_number):
         """Get the next version number for a duplicate signal"""
-        duplicate_info = self.get_duplicate_info(signal_id, fm)
+        duplicate_info = self.get_duplicate_info(signal_id, fm, serial_number)
         if not duplicate_info:
             return 0  # First version
         
@@ -169,9 +158,8 @@ class DuplicateManager:
         
         return version
     
-    def register_version(self, signal_id, fm, recipient, version_number):
+    def register_version(self, signal_id, fm, recipient, version_number, serial_number):
         """Register a new version of a signal for a recipient"""
-        serial_number = self.generate_serial_number(signal_id, fm)
         
         if serial_number in self.signals_db:
             versions = self.signals_db[serial_number].setdefault('versions', {})
@@ -187,7 +175,7 @@ class DuplicateManager:
             return signal_id
         return f"{signal_id}({version_number})"
     
-    def check_folder_conflict_and_get_version(self, signal_id, fm, recipient_name):
+    def check_folder_conflict_and_get_version(self, signal_id, fm, recipient_name, serial_number):
         """
         Check if signal ID folder exists for recipient but with different serial number.
         Returns version number to use if folder conflict exists, 0 if no conflict.
@@ -195,8 +183,6 @@ class DuplicateManager:
         """
         path_manager = get_path_manager()
         data_folder = path_manager.data_folder
-        
-        current_serial = self.generate_serial_number(signal_id, fm)
         
         # Check only DATA folder
         if not data_folder.exists():
@@ -209,17 +195,16 @@ class DuplicateManager:
         # Check if exact signal ID folder exists
         signal_folder = recipient_folder / signal_id
         if signal_folder.exists():
-            # Read the signal_info.json to get the FM and check serial
+            # Read the signal_info.json to get the serial_number and check if different
             signal_info_path = signal_folder / "signal_info.json"
             if signal_info_path.exists():
                 try:
                     with open(signal_info_path, 'r', encoding='utf-8') as f:
                         signal_info = json.load(f)
-                        existing_fm = signal_info.get('fm', 'UNKNOWN')
-                        existing_serial = self.generate_serial_number(signal_id, existing_fm)
+                        existing_serial = signal_info.get('serial_number', None)
                         
                         # If different serial numbers, this is a different signal with same ID
-                        if existing_serial != current_serial:
+                        if existing_serial != serial_number:
                             # Find the next available version number for this ID (not serial)
                             return self._get_next_id_version_number(recipient_folder, signal_id)
                 except Exception:

@@ -19,7 +19,7 @@ import platform
 from app.utils.path_manager import get_path_manager
 
 class USBExtractor:
-    def __init__(self, config_manager=None):
+    def __init__(self, config_manager=None, progress_manager=None):
         # Use the centralized path manager instead of calculating paths manually
         self.path_manager = get_path_manager()
         self.data_folder = self.path_manager.data_folder
@@ -27,6 +27,7 @@ class USBExtractor:
         self.templates_folder = self.path_manager.templates_folder
         self.signal_manager = None
         self.config_manager = config_manager
+        self.progress_manager = progress_manager
         
         print(f"USBExtractor using DATA folder: {self.data_folder}")
         print(f"USBExtractor using BACKUP folder: {self.backup_folder}")
@@ -122,10 +123,21 @@ class USBExtractor:
             # Δημιουργία Excel και PDF για κάθε παραλήπτη ξεχωριστά (only in official mode)
             pdf_paths = []
             if not is_unofficial:
+                recipient_count = len(all_signals_data.keys())
+                current_recipient = 0
+                
                 for recipient in all_signals_data.keys():
+                    current_recipient += 1
+                    
+                    # Update progress for Excel creation
+                    if self.progress_manager:
+                        progress_val = 40 + (current_recipient - 1) * 30 / recipient_count
+                        self.progress_manager.update_progress("usb_extraction", progress_val, 
+                                                            f"Δημιουργία Excel αρχείου για '{recipient}'...")
+                    
                     recipient_signals = {recipient: all_signals_data[recipient]}
                     pdf_path = self.create_excel_and_pdf_for_recipient(
-                        recipient_signals, file_number, username, backup_folder_name
+                        recipient_signals, file_number, username, backup_folder_name, current_recipient, recipient_count
                     )
                     if pdf_path:
                         pdf_paths.append(pdf_path)
@@ -158,12 +170,18 @@ class USBExtractor:
         except Exception as e:
             print(f"Σφάλμα στη δημιουργία backup: {e}")
     
-    def create_excel_and_pdf_for_recipient(self, recipient_signals_data, file_number, username, backup_folder_name):
+    def create_excel_and_pdf_for_recipient(self, recipient_signals_data, file_number, username, backup_folder_name, current_recipient=1, total_recipients=1):
         """Δημιουργία Excel και PDF για έναν παραλήπτη"""
         import time
         
         try:
             recipient_name = list(recipient_signals_data.keys())[0]
+            
+            # Update progress for Excel creation start
+            if self.progress_manager:
+                progress_val = 40 + (current_recipient - 1) * 30 / total_recipients
+                self.progress_manager.update_progress("usb_extraction", progress_val, 
+                                                    f"Excel '{recipient_name}' δημιουργείται...")
             
             # 1. Δημιουργία temp folder
             temp_folder = self.path_manager.temp_folder
@@ -223,6 +241,11 @@ class USBExtractor:
                 time.sleep(2)
             
             # 4. Εξαγωγή σε PDF
+            if self.progress_manager:
+                progress_val = 40 + (current_recipient - 0.3) * 30 / total_recipients
+                self.progress_manager.update_progress("usb_extraction", progress_val, 
+                                                    f"PDF εξαγωγή '{recipient_name}'...")
+            
             pdf_path = self.export_excel_to_pdf_new(temp_excel_path, recipient_name, file_number, backup_folder_name, total_signals)
             
             # 5. Καθαρισμός temp folder

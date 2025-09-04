@@ -122,13 +122,28 @@ class PDFProcessor:
             # Λήψη όλων των αρχείων από downloads (εκτός από pyrseia_server.pdf)
             attachment_files = self.get_all_downloads_files()
             
+            # Προσπάθεια εξαγωγής του πλήρους περιεχομένου από το PDF για το serial number
+            full_content = f"{signal_id}_{fm}"  # Fallback αν δεν μπορέσουμε να διαβάσουμε το PDF
+            try:
+                if pdf_path and os.path.exists(pdf_path):
+                    doc = fitz.open(pdf_path)
+                    pdf_text = ""
+                    for page_num in range(doc.page_count):
+                        page = doc[page_num]
+                        pdf_text += page.get_text() + "\n"
+                    doc.close()
+                    if pdf_text.strip():
+                        full_content = pdf_text
+            except Exception as e:
+                print(f"Σφάλμα στην ανάγνωση PDF για serial number: {e}")
+            
             signal_data = {
                 'id': signal_id,
                 'fm': fm,
                 'theme': 'Manual Signal Entry',
                 'recipients': [],
                 'attachments': attachment_files,
-                'serial_number': self.generate_serial_number(signal_id, fm)
+                'serial_number': self.generate_serial_number(full_content)
             }
             
             return signal_data
@@ -250,8 +265,8 @@ class PDFProcessor:
         # 5. Εξαγωγή συνημμένων
         signal_data['attachments'] = self.extract_attachments(cleaned_text)
         
-        # 6. Δημιουργία serial number
-        signal_data['serial_number'] = self.generate_serial_number(signal_data['id'], signal_data['fm'])
+        # 6. Δημιουργία serial number από το πλήρες περιεχόμενο
+        signal_data['serial_number'] = self.generate_serial_number(text)
         
         return signal_data
     
@@ -498,12 +513,11 @@ class PDFProcessor:
         
         return attachments
     
-    def generate_serial_number(self, signal_id, fm):
-        """Δημιουργία μοναδικού serial number"""
+    def generate_serial_number(self, full_content):
+        """Δημιουργία μοναδικού serial number από το πλήρες περιεχόμενο του PDF"""
         try:
-            # Συνδυασμός ID και FM
-            combined_string = f"{signal_id}_{fm}"
-            hash_object = hashlib.md5(combined_string.encode())
+            # Χρήση του πλήρους περιεχομένου του PDF για τη δημιουργία του serial number
+            hash_object = hashlib.md5(full_content.encode('utf-8'))
             hex_dig = hash_object.hexdigest()
             
             # Μετατροπή σε αριθμό (παίρνουμε τα πρώτα 8 χαρακτήρες)

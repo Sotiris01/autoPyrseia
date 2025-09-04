@@ -46,10 +46,13 @@ class USBExtractionTab:
     
     def _create_settings_section(self, parent):
         """Create extraction settings section"""
-        # Username
+        # Username (Combobox for typing + dropdown selection)
         tk.Label(parent, text="Όνομα Χρήστη:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
-        self.app.username_entry = tk.Entry(parent, textvariable=self.app.username, width=30)
-        self.app.username_entry.grid(row=0, column=1, sticky='w', padx=5, pady=5)
+        self.app.username_combobox = ttk.Combobox(parent, textvariable=self.app.username, width=28)
+        self.app.username_combobox.grid(row=0, column=1, sticky='w', padx=5, pady=5)
+        
+        # Populate combobox with username suggestions
+        self._update_username_suggestions()
         
         # File Number
         tk.Label(parent, text="Αριθμός Φακέλου:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
@@ -61,7 +64,7 @@ class USBExtractionTab:
         self.app.file_number.trace_add('write', self._auto_save_file_number)
         
         # Tooltips
-        self.app.create_tooltip(self.app.username_entry, "Εισάγετε το όνομα χρήστη για την εξαγωγή - Αυτόματη αποθήκευση")
+        self.app.create_tooltip(self.app.username_combobox, "Εισάγετε ή επιλέξτε όνομα χρήστη - Αυτόματη αποθήκευση - Παλιά ονόματα (>5 ημέρες) αφαιρούνται αυτόματα")
         self.app.create_tooltip(self.app.file_number_entry, "Αριθμός φακέλου - Αυτόματη αποθήκευση - Αυξάνεται μετά από κάθε εξαγωγή")
     
     def _create_recipients_section(self, parent):
@@ -141,6 +144,9 @@ class USBExtractionTab:
         except Exception as e:
             print(f"Σφάλμα στη σάρωση JSON κατά την ανανέωση: {e}")
         
+        # Update username suggestions as well
+        self._update_username_suggestions()
+        
         # Clear previous checkboxes
         for widget in self.app.extraction_checkbox_frame.winfo_children():
             widget.destroy()
@@ -179,9 +185,13 @@ class USBExtractionTab:
                     text=display_text,
                     variable=var,
                     font=('Arial', 10),
-                    anchor='w'
+                    anchor='w',
+                    command=lambda r=recipient, v=var, cb=None: self._on_recipient_selection_changed(r, v, cb)
                 )
                 checkbox.pack(side='left', fill='x', expand=True)
+                
+                # Update the lambda to pass the checkbox reference
+                checkbox.config(command=lambda r=recipient, v=var, cb=checkbox: self._on_recipient_selection_changed(r, v, cb))
                 
                 # Create folder icon button
                 folder_button = FolderIconButton.create(
@@ -228,6 +238,30 @@ class USBExtractionTab:
         
         checkbox.bind('<Button-3>', show_context_menu)
     
+    def _on_recipient_selection_changed(self, recipient_name, var, checkbox):
+        """Handle recipient selection change to update visual styling"""
+        try:
+            if var.get():  # Selected
+                # Make selected recipient more noticeable
+                checkbox.config(
+                    font=('Arial', 12, 'bold'),  # Larger, bold font
+                    bg='#e3f2fd',  # Light blue highlight background
+                    fg='#1976d2',  # Dark blue text
+                    activebackground='#bbdefb',  # Slightly darker when active
+                    selectcolor='#2196f3'  # Blue checkbox color
+                )
+            else:  # Deselected
+                # Return to normal styling
+                checkbox.config(
+                    font=('Arial', 10),  # Normal font
+                    bg='SystemButtonFace',  # Default background
+                    fg='SystemButtonText',  # Default text color
+                    activebackground='SystemButtonFace',  # Default active background
+                    selectcolor='SystemWindow'  # Default checkbox color
+                )
+        except Exception as e:
+            print(f"Error updating checkbox styling: {e}")
+    
     def _open_recipient_folder(self, recipient_name):
         """Open recipient folder in File Explorer"""
         try:
@@ -251,6 +285,12 @@ class USBExtractionTab:
         """Select or deselect all extraction checkboxes"""
         for checkbox_data in self.app.extraction_checkboxes:
             checkbox_data['var'].set(state)
+            # Trigger visual feedback for each checkbox
+            self._on_recipient_selection_changed(
+                checkbox_data['recipient'], 
+                checkbox_data['var'], 
+                checkbox_data['checkbox']
+            )
     
     def get_selected_extraction_recipients(self):
         """Get selected recipients for extraction"""
@@ -338,15 +378,21 @@ class USBExtractionTab:
                         self.extraction_completed(result)
                         # Complete progress after extraction_completed
                         self.app.progress_manager.complete_operation("usb_extraction", f"Ολοκλήρωση {extraction_type} εξαγωγής...")
+                        # Reset progress bar to 0% after 2 seconds
+                        self.app.root.after(2000, lambda: self.app.progress_manager.reset_progress("usb_extraction", "Έτοιμο - Αναμονή για νέο σήμα..."))
                     
                     self.app.root.after(400, lambda: handle_success_with_mode(result_data))
                 else:
                     self.app.root.after(0, lambda: self.extraction_completed(None))
+                    # Reset progress bar to 0% after failure
+                    self.app.root.after(2000, lambda: self.app.progress_manager.reset_progress("usb_extraction", "Έτοιμο - Αναμονή για νέο σήμα..."))
                 
             except Exception as e:
                 print(f"Σφάλμα εξαγωγής: {e}")
                 self.app.root.after(0, lambda: self.extraction_completed(None))
                 self.app.root.after(0, lambda: self.app.progress_manager.reset_progress("usb_extraction", f"Σφάλμα: {str(e)}"))
+                # Reset to ready state after 3 seconds
+                self.app.root.after(3000, lambda: self.app.progress_manager.reset_progress("usb_extraction", "Έτοιμο - Αναμονή για νέο σήμα..."))
         
         threading.Thread(target=extract_in_thread, daemon=True).start()
     
@@ -358,10 +404,7 @@ class USBExtractionTab:
         # Processing completed successfully
         if result_data:
             try:
-                print(f"🔍 USB DEBUG: extraction_completed called")
-                
                 is_unofficial = result_data.get('is_unofficial', False)
-                print(f"🔍 USB DEBUG: is_unofficial: {is_unofficial}")
                 
                 # Auto-disable unofficial mode after successful unofficial extraction
                 if is_unofficial and self.app.unofficial_mode.get():
@@ -370,7 +413,6 @@ class USBExtractionTab:
                     self.app.status_bar.update_status("Ανεπίσημη εξαγωγή ολοκληρώθηκε - Λειτουργία επαναφέρθηκε σε κανονική")
                 
                 extracted_recipients = result_data.get('extracted_recipients', [])
-                print(f"🔍 USB DEBUG: extracted_recipients count: {len(extracted_recipients)}")
                 
                 # Process each recipient extraction
                 for recipient_data in extracted_recipients:
@@ -378,8 +420,6 @@ class USBExtractionTab:
                     # Fix: signals is a list, get the count
                     signals = recipient_data.get('signals', [])
                     signal_count = len(signals) if signals else 0
-                    
-                    print(f"🔍 USB DEBUG: Processing {recipient_name} with {signal_count} signals")
                     
                     # Add to history
                     if hasattr(self.app, 'history_tab'):
@@ -391,11 +431,11 @@ class USBExtractionTab:
                     backup_path = os.path.join("BACK UP DATA", recipient_name)
                     
             except Exception as e:
-                print(f"🔍 USB DEBUG: ❌ Error in processing: {e}")
                 import traceback
                 traceback.print_exc()
         else:
-            print(f"🔍 USB DEBUG: ⚠️ No result_data - skipping processing")
+            # No result_data - skipping processing
+            pass
         
         # Refresh extraction list
         self.refresh_extraction_list()
@@ -492,6 +532,15 @@ class USBExtractionTab:
             self.app.unofficial_button.config(bg='#95a5a6', text="ΑΝΕΠΙΣΗΜΑ")
             self.app.status_bar.update_status("Λειτουργία ΑΝΕΠΙΣΗΜΑ απενεργοποιήθηκε - Κανονική λειτουργία")
     
+    def _update_username_suggestions(self):
+        """Update combobox with username suggestions from history"""
+        try:
+            suggestions = self.app.config_manager.get_username_suggestions()
+            self.app.username_combobox['values'] = suggestions
+        except Exception as e:
+            print(f"Σφάλμα ενημέρωσης προτάσεων χρήστη: {e}")
+            self.app.username_combobox['values'] = []
+    
     def _auto_save_username(self, *args):
         """Auto-save username changes with delay to prevent excessive writes"""
         # Cancel previous timer if user is still typing
@@ -502,11 +551,15 @@ class USBExtractionTab:
         self.username_save_timer = self.app.root.after(500, self._save_username)
     
     def _save_username(self):
-        """Actually save the username to config"""
+        """Actually save the username to config and update suggestions"""
         try:
             username = self.app.username.get().strip()
             # Save even empty usernames to clear the field
             self.app.config_manager.set_username(username)
+            
+            # Update suggestions after saving (in case of new username)
+            if username:
+                self._update_username_suggestions()
             
             # Reset timer
             self.username_save_timer = None
