@@ -230,18 +230,49 @@ del temp_content.txt
 cd ..
 cd ..
 
+REM Test 7: Long attachment filename spanning two lines
+echo Creating Test 7: Long attachment filename test...
+mkdir "test7"
+cd "test7"
+
+(
+echo R 777999Z JUL 25
+echo FM COMMAND CENTER FOXTROT
+echo TO ΦΡΟΥΡΑΡΧΕΙΟ ΙΩΑΝΝΙΝΩΝ
+echo ΣΠ ΙΩΑΝΝΙΝΩΝ
+echo ΘΕΜΑ: TEST MESSAGE SEVEN - LONG FILENAME TEST
+echo ΣΧΕΤ. : LONG_FILENAME_TEST_REF
+echo.
+echo This is test case seven with very long attachment filename.
+echo Tests autoPyrseia's ability to handle filenames that span multiple lines.
+echo The attachment filename below exceeds normal line length limits.
+echo Test content only - not real military data.
+echo.
+echo 1 συνημμένα αρχεία:
+echo 1. very_long_attachment_filename_that_exceeds_
+echo    in_the_display_system_test_document_with_additional_descriptive_text.docx
+) > temp_content.txt
+
+copy temp_content.txt pyrseia_server.pdf > nul
+python ..\..\create_pdf_helper.py temp_content.txt pyrseia_server.pdf
+echo This is a test document with a very long filename that spans multiple lines > very_long_attachment_filename_that_exceeds_in_the_display_system_test_document_with_additional_descriptive_text.docx
+del temp_content.txt
+
+cd ..
+
 echo.
 echo ================================
 echo Test data creation completed!
 echo ================================
 echo.
-echo Created 6 test folders:
+echo Created 7 test folders:
 echo - test1: 1 recipient, 0 attachments
 echo - test2: 3 recipients, 1 attachment  
 echo - test3: 3 recipients, 2 attachments ^(TO/INFO format^)
 echo - test4: 5 recipients, 1 attachment ^(complex case^)
 echo - test5: 3 recipients, 2 attachments ^(edge case^)
 echo - test6: 2 identical signals, 1 char difference ^(duplicate detection test^)
+echo - test7: 2 recipients, 1 attachment ^(long filename test^)
 echo.
 echo Each folder contains:
 echo - pyrseia_server.pdf ^(test signal file^)
@@ -253,10 +284,16 @@ echo - Both have identical ID, FM, and recipient
 echo - Only difference: "Test marker: A" vs "Test marker: B"
 echo - Perfect for testing duplicate detection system
 echo.
+echo Test 7 special note:
+echo - Tests very long attachment filenames
+echo - Filename exceeds normal line length limits
+echo - Tests parsing capabilities for multi-line filenames
+echo.
 echo All content is TEST DATA ONLY - no real military information.
 echo.
 echo To use: Copy contents of any test folder to your downloads folder
 echo and run autoPyrseia to test different scenarios.
 echo For test6: Copy signal_a first, process, then copy signal_b to test duplicates.
+echo For test7: Tests attachment filename parsing with exceptionally long names.
 echo.
 pause

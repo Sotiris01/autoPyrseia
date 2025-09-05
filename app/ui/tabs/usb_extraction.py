@@ -547,8 +547,8 @@ class USBExtractionTab:
         if self.username_save_timer is not None:
             self.app.root.after_cancel(self.username_save_timer)
         
-        # Schedule save after 500ms delay
-        self.username_save_timer = self.app.root.after(500, self._save_username)
+        # Schedule save after 2000ms (2 seconds) delay
+        self.username_save_timer = self.app.root.after(2000, self._save_username)
     
     def _save_username(self):
         """Actually save the username to config and update suggestions"""

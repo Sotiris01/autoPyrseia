@@ -449,6 +449,28 @@ class PDFProcessor:
         attachments = []
         lines = text.split('\n')
         
+        # Comprehensive list of common file extensions
+        # Documents
+        doc_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', 
+                         '.odt', '.ods', '.odp', '.rtf', '.txt', '.csv', '.xml']
+        # Images
+        img_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif', 
+                         '.svg', '.webp', '.ico', '.heic']
+        # Archives
+        arc_extensions = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz']
+        # Media
+        media_extensions = ['.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv', 
+                           '.wav', '.flac', '.aac', '.ogg']
+        # Other common formats
+        other_extensions = ['.html', '.htm', '.css', '.js', '.json', '.log', '.dat',
+                           '.bin', '.exe', '.msi', '.dmg', '.iso', '.sql', '.db']
+        
+        # Combine all extensions
+        file_extensions = doc_extensions + img_extensions + arc_extensions + media_extensions + other_extensions
+        
+        # Also create a pattern to detect any file with extension format (dot followed by 2-5 alphanumeric characters)
+        generic_extension_pattern = r'\.\w{2,5}(?:\s|$)'
+        
         # Αναζήτηση για "συνημμένα αρχεία:" και τις επόμενες γραμμές με αρίθμηση
         found_attachment_section = False
         
@@ -458,7 +480,6 @@ class PDFProcessor:
             # Εύρεση της γραμμής με "συνημμένα αρχεία"
             if re.search(r'συνημμένα αρχεία', line, re.IGNORECASE):
                 found_attachment_section = True
-                
                 # Ελέγχω αν υπάρχει κάτι στην ίδια γραμμή μετά το ":"
                 attachment_on_same_line = re.search(r'συνημμένα αρχεία[:\s]+(.*)', line, re.IGNORECASE)
                 if attachment_on_same_line:
@@ -467,18 +488,65 @@ class PDFProcessor:
                         attachments.append(attachment_text)
                 
                 # Συνεχίζω να ψάχνω τις επόμενες γραμμές για αριθμημένα αρχεία
-                for j in range(i + 1, min(i + 20, len(lines))):  # Ψάχνω τις επόμενες 20 γραμμές μέγιστο
+                j = i + 1
+                while j < min(i + 50, len(lines)):  # Αυξάνω το όριο για μεγάλες λίστες
                     next_line = lines[j].strip()
                     
                     # Αναζήτηση για αριθμημένα αρχεία (1. filename, 2. filename, κτλ)
-                    numbered_attachment = re.search(r'^\d+\.\s*(.+)', next_line)
+                    numbered_attachment = re.search(r'^(\d+)\.\s*(.+)', next_line)
                     if numbered_attachment:
-                        attachment_name = numbered_attachment.group(1).strip()
+                        attachment_name = numbered_attachment.group(2).strip()
+                        
+                        # Check if attachment name continues on next lines (for long filenames)
+                        k = j + 1
+                        while k < len(lines):
+                            continuation_line = lines[k].strip()
+                            
+                            # Stop if we hit another numbered item or a new section
+                            # But be more specific - only break if it's truly a new numbered item (digit followed by period and space)
+                            if re.search(r'^\d+\.\s', continuation_line) or re.search(r'^[Α-ΩA-Z]+\s*[:\.]', continuation_line):
+                                break
+                            
+                            # If the line doesn't start with a numbered item pattern and isn't empty, it's likely a continuation
+                            if continuation_line and not re.search(r'^\d+\.\s', continuation_line):
+                                # Remove any leading spaces and concatenate properly
+                                continuation_line = continuation_line.lstrip()
+                                attachment_name += continuation_line
+                                
+                                # Check if current attachment_name ends with a valid file extension
+                                has_extension = any(attachment_name.lower().endswith(ext) for ext in file_extensions)
+                                has_generic_extension = bool(re.search(r'\.\w{2,5}$', attachment_name))
+                                
+                                # If we found a file extension at the end, this attachment is complete
+                                if has_extension or has_generic_extension:
+                                    k += 1
+                                    break
+                            elif not continuation_line:
+                                # Empty line might signal the end of this attachment
+                                break
+                            else:
+                                # Some other pattern, stop here
+                                break
+                            
+                            k += 1
+                        
                         # Καθαρισμός από URLs και ειδικούς χαρακτήρες
                         attachment_name = re.sub(r'http[s]?://\S+', '', attachment_name)
                         attachment_name = attachment_name.strip()
+                        
+                        # Only add attachment if it has a valid file extension
                         if attachment_name:
-                            attachments.append(attachment_name)
+                            has_valid_extension = any(attachment_name.lower().endswith(ext) for ext in file_extensions)
+                            has_generic_extension = bool(re.search(r'\.\w{2,5}$', attachment_name))
+                            
+                            if has_valid_extension or has_generic_extension:
+                                attachments.append(attachment_name)
+                            else:
+                                print(f"Warning: Skipping attachment without valid extension: {attachment_name}")
+                        
+                        # Continue from where we left off
+                        j = k - 1
+                        
                     elif next_line and not re.search(r'^[A-Ζ\s]+:', next_line):
                         # Αν η γραμμή δεν είναι κενή και δεν είναι νέα ενότητα, μπορεί να είναι συνημμένο
                         # αλλά σταματάμε αν βρούμε νέα ενότητα (π.χ. "ΣΧΕΤ:", "ΘΕΜΑ:", κτλ)
@@ -486,6 +554,8 @@ class PDFProcessor:
                     elif re.search(r'^[Α-Ω]+\s*[:\.]', next_line):
                         # Νέα ενότητα, σταματάμε
                         break
+                    
+                    j += 1
                 
                 break
         
@@ -497,15 +567,62 @@ class PDFProcessor:
             if count_matches:
                 count = int(count_matches[0])
                 # Ψάχνω για αριθμημένα αρχεία σε όλο το κείμενο
-                for line in lines:
-                    numbered_attachment = re.search(r'^\d+\.\s*(.+)', line.strip())
+                i = 0
+                while i < len(lines) and len(attachments) < count:
+                    line = lines[i].strip()
+                    numbered_attachment = re.search(r'^(\d+)\.\s*(.+)', line)
                     if numbered_attachment:
-                        attachment_name = numbered_attachment.group(1).strip()
+                        attachment_name = numbered_attachment.group(2).strip()
+                        
+                        # Handle multi-line attachments
+                        j = i + 1
+                        while j < len(lines):
+                            next_line = lines[j].strip()
+                            
+                            # Stop if we hit another numbered item
+                            if re.search(r'^\d+\.\s', next_line):
+                                break
+                            
+                            # Check for file extension
+                            has_extension = any(ext in next_line.lower() for ext in file_extensions)
+                            has_generic_extension = bool(re.search(generic_extension_pattern, next_line))
+                            
+                            if next_line and not re.search(r'^\d+\.\s', next_line):
+                                # Remove any leading spaces and concatenate properly
+                                next_line = next_line.lstrip()
+                                attachment_name += next_line
+                                
+                                # Check if current attachment_name ends with a valid file extension
+                                has_extension = any(attachment_name.lower().endswith(ext) for ext in file_extensions)
+                                has_generic_extension = bool(re.search(r'\.\w{2,5}$', attachment_name))
+                                
+                                if has_extension or has_generic_extension:
+                                    j += 1
+                                    break
+                            elif not next_line:
+                                break
+                            else:
+                                break
+                            
+                            j += 1
+                        
                         # Καθαρισμός από URLs
                         attachment_name = re.sub(r'http[s]?://\S+', '', attachment_name)
                         attachment_name = attachment_name.strip()
-                        if attachment_name and len(attachments) < count:
-                            attachments.append(attachment_name)
+                        
+                        # Only add attachment if it has a valid file extension
+                        if attachment_name:
+                            has_valid_extension = any(attachment_name.lower().endswith(ext) for ext in file_extensions)
+                            has_generic_extension = bool(re.search(r'\.\w{2,5}$', attachment_name))
+                            
+                            if has_valid_extension or has_generic_extension:
+                                attachments.append(attachment_name)
+                            else:
+                                print(f"Warning: Skipping attachment without valid extension: {attachment_name}")
+                        
+                        i = j - 1
+                    
+                    i += 1
                 
                 # Αν δεν βρήκαμε αρκετά, δημιουργούμε placeholder
                 while len(attachments) < count:

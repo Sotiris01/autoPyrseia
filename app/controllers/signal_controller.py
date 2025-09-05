@@ -7,6 +7,7 @@ Signal processing controller for autoPyrseia
 import threading
 import tkinter as tk
 from app.ui.dialogs.manual_input import ManualInputDialog
+from app.ui.dialogs.missing_attachments import MissingAttachmentsDialog
 from app.utils.file_operations import check_attachment_exists
 
 
@@ -46,7 +47,8 @@ class SignalController:
                 
                 self.app.root.after(400, lambda: self.app.display_signal_data(signal_data))
             except Exception as e:
-                self.app.root.after(0, lambda: self.handle_pdf_error(str(e)))
+                error_msg = str(e)
+                self.app.root.after(0, lambda: self.handle_pdf_error(error_msg))
         
         threading.Thread(target=process_in_thread, daemon=True).start()
     
@@ -104,8 +106,37 @@ class SignalController:
                 missing_attachments = [att for att in attachments if not check_attachment_exists(att)]
                 
                 if missing_attachments:
-                    self.app.root.after(0, lambda: self.app.progress_manager.reset_progress("signal_processing", f"Αναμονή για {len(missing_attachments)} συνημμένα"))
-                    return
+                    # Show missing attachments dialog and let user decide
+                    user_choice = [None]  # Use list to modify from lambda
+                    
+                    def show_missing_dialog():
+                        dialog = MissingAttachmentsDialog(
+                            self.app.root, 
+                            missing_attachments, 
+                            len(attachments)
+                        )
+                        user_choice[0] = dialog.result
+                    
+                    # Show dialog on main thread and wait for result
+                    self.app.root.after(0, show_missing_dialog)
+                    
+                    # Wait for user decision (poll until dialog is closed)
+                    import time
+                    while user_choice[0] is None:
+                        time.sleep(0.1)
+                        self.app.root.update()
+                    
+                    if not user_choice[0]:  # User chose to cancel
+                        self.app.root.after(0, lambda: self.app.progress_manager.reset_progress(
+                            "signal_processing", 
+                            f"Επεξεργασία ακυρώθηκε - λείπουν {len(missing_attachments)} συνημμένα"
+                        ))
+                        return
+                    
+                    # User chose to continue - update attachments list to only include existing ones
+                    existing_attachments = [att for att in attachments if check_attachment_exists(att)]
+                    self.app.current_signal_data['attachments'] = existing_attachments
+                    attachments = existing_attachments  # Update local variable too
                 
                 # Λήψη επιλεγμένων παραληπτών από checkboxes
                 self.app.root.after(400, lambda: self.app.progress_manager.smooth_progress("signal_processing", 35, 200))
@@ -239,7 +270,8 @@ class SignalController:
                 self.app.root.after(600, lambda: self.app.signal_processed_successfully(result, versioned_signal_data))
                 
             except Exception as e:
-                self.app.root.after(0, lambda: self.app.progress_manager.reset_progress("signal_processing", f"Σφάλμα: {str(e)}"))
+                error_msg = str(e)
+                self.app.root.after(0, lambda: self.app.progress_manager.reset_progress("signal_processing", f"Σφάλμα: {error_msg}"))
         
         threading.Thread(target=process_in_thread, daemon=True).start()
     
